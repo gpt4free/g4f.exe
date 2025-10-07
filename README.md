@@ -11,11 +11,11 @@
 
 - 🚀 **One-click installation** - No technical knowledge needed
 - 📦 **Portable** - No system changes, everything self-contained
-- 💾 **Optimized** - Only 149 MB installed (75% smaller than alternatives!)
+- 💾 **Optimized** - Only 149 MB installed (75% smaller than full install)
 - 🌐 **API + GUI** - Both web interface and REST API included
 - 🖥️ **Wide compatibility** - Windows Vista/7/8.1/10/11 support
 - 🔗 **Desktop shortcut** - Easy server startup
-- ⚡ **Fast** - 3-5 minute installation
+- ⚡ **Fast** - 2-5 minute installation
 
 ## 📥 Download
 
@@ -35,7 +35,7 @@ Or build from source (see below)
 - **Windows 8.1** (64-bit)
 - 2 GB RAM
 - 200 MB free disk space
-- Internet connection (for first run)
+- Internet connection
 
 ### ⚠️ Windows Vista/7 (Experimental Support)
 
@@ -75,7 +75,7 @@ See [VISTA-SUPPORT.md](VISTA-SUPPORT.md) for detailed instructions.
 3. **Choose** installation type:
    - **Optimized** (149 MB) ⭐ Recommended - API + GUI + all providers
    - **Full** (600 MB) - Everything + extras (markdown converters, etc.)
-4. **Wait** for installation (~3-5 minutes for optimized)
+4. **Wait** for installation (~1-2 minutes for optimized)
 5. **Browser opens** automatically to http://localhost:8080/chat/
 6. **Start chatting!** 🎉
 
@@ -83,8 +83,8 @@ See [VISTA-SUPPORT.md](VISTA-SUPPORT.md) for detailed instructions.
 
 | Type | Size | Install Time | What's Included |
 |------|------|--------------|-----------------|
-| **Optimized** ⭐ | 149 MB | 3-5 min | API, GUI, all providers, essential dependencies |
-| Full | 600 MB | 5-10 min | Everything + markdown converters & extras |
+| **Optimized** ⭐ | 149 MB | 1-2 min | API, GUI, all providers, essential dependencies |
+| Full | 600 MB | 4-5 min | Everything + markdown converters & extras |
 
 ### What's Skipped in Optimized?
 - Markdown file converters (Word/Excel/PDF → markdown)
