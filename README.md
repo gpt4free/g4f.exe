@@ -20,6 +20,26 @@
 ## 📥 Download
 
 **[Download Latest Release](https://github.com/gpt4free/g4f.exe/releases/latest)**
+## 📥 Download Options
+
+### Option 1: Installer (Recommended)
+**[Download g4f_launcher.exe](https://github.com/gpt4free/g4f.exe/releases/download/ver1/g4f_launcher.exe)** (~100 KB)
+
+- Automatically downloads and installs Python + g4f
+- Choose Optimized (149 MB) or Full (600 MB)
+
+### Option 2: Portable (Pre-installed)
+**[Download gpt4free_portable_preinstalled.zip](https://github.com/gpt4free/g4f.exe/releases/download/ver1/gpt4free_portable_preinstalled.zip)** (~600 MB)
+
+- Python and g4f already installed
+- Just extract and run
+- No installation needed
+- This is for when youre having trouble with option 1
+
+
+
+
+
 
 Or build from source (see below)
 
@@ -29,13 +49,11 @@ Or build from source (see below)
 - **Windows 10** or **Windows 11** (64-bit)
 - 4 GB RAM
 - 500 MB free disk space
-- Internet connection
 
 ### Minimum
 - **Windows 8.1** (64-bit)
 - 2 GB RAM
 - 200 MB free disk space
-- Internet connection
 
 ### ⚠️ Windows Vista/7 (Experimental Support)
 
@@ -60,7 +78,7 @@ If automatic downloads fail on Vista/7:
 
 2. **Transfer to Vista/7** (USB, network, etc.)
 
-3. **Extract to `python-embed` folder** next to `g4f.exe`
+3. **Extract to `python-embed` folder** next to `g4f_launcher.exe`
 
 4. **Run launcher again** - continues installation automatically
 
@@ -70,7 +88,7 @@ See [VISTA-SUPPORT.md](VISTA-SUPPORT.md) for detailed instructions.
 
 ## 🚀 Quick Start
 
-1. **Download** `g4f.exe` from [releases](https://github.com/gpt4free/g4f.exe/releases/latest)
+1. **Download** `g4f_launcher.exe` from [releases](https://github.com/gpt4free/g4f.exe/releases/latest)
 2. **Run** the executable
 3. **Choose** installation type:
    - **Optimized** (149 MB) ⭐ Recommended - API + GUI + all providers
