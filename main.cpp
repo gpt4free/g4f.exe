@@ -73,10 +73,10 @@ bool createDesktopShortcut() {
     std::wstring shortcutPath = std::wstring(desktopPath) + L"\\Start G4F Server.lnk";
 
     // Python exe path
-    std::wstring pythonPath = std::wstring(currentDir) + L"\\python-embed\\python.exe";
+    std::wstring launcherPath = std::wstring(currentDir) + L"\\g4f_launcher.exe";
 
     // Command arguments
-    std::wstring arguments = L"-m g4f.cli api --port 8080";
+    std::wstring arguments = L"";
 
     // Create shortcut using COM
     CoInitialize(nullptr);
@@ -89,10 +89,10 @@ bool createDesktopShortcut() {
         pShellLink->SetPath(pythonPath.c_str());
         pShellLink->SetArguments(arguments.c_str());
         pShellLink->SetWorkingDirectory(currentDir);
-        pShellLink->SetDescription(L"Start g4f API and GUI server");
+        pShellLink->SetDescription(L"Start G4F Launcher");
 
         // Set icon (use Python icon)
-        pShellLink->SetIconLocation(pythonPath.c_str(), 0);
+        pShellLink->SetIconLocation(launcherPath.c_str(), 0);
 
         IPersistFile* pPersistFile = nullptr;
         hr = pShellLink->QueryInterface(IID_IPersistFile, (void**)&pPersistFile);
@@ -367,6 +367,7 @@ bool installG4F(LauncherGUI* gui) {
 
         gui->setProgress(70);
         gui->setStatus("Installing g4f core...");
+        gui->addLog("Installing g4f core...");
 
         // Install core g4f
         int result = silentSystem("python-embed\\python.exe -m pip install g4f --prefer-binary --no-warn-script-location");
@@ -376,36 +377,50 @@ bool installG4F(LauncherGUI* gui) {
         }
 
         gui->setProgress(75);
-        gui->setStatus("Installing API server...");
-        gui->addLog("Installing API server dependencies...");
+        gui->setStatus("Installing g4f slim...");
+        gui->addLog("Installing g4f slim...");
 
-        // Install API dependencies
-        result = silentSystem("python-embed\\python.exe -m pip install fastapi uvicorn python-multipart loguru --prefer-binary --no-warn-script-location --quiet");
+        // Install slim dependencies
+        result = silentSystem("python-embed\\python.exe -m pip install g4f[slim] --prefer-binary --no-warn-script-location --quiet");
         if (result != 0) {
-            gui->addLog("WARNING: Some API dependencies may be missing");
+            gui->addLog("WARNING: Some slim dependencies may be missing");
         }
-
-        gui->setProgress(80);
-        gui->setStatus("Installing GUI...");
-        gui->addLog("Installing GUI dependencies...");
-
-        // Install GUI dependencies
-        result = silentSystem("python-embed\\python.exe -m pip install flask werkzeug a2wsgi beautifulsoup4 pillow --prefer-binary --no-warn-script-location --quiet");
-        if (result != 0) {
-            gui->addLog("WARNING: Some GUI dependencies may be missing");
-        }
-
-        gui->setProgress(85);
-        gui->addLog("Installing provider dependencies...");
-
-        // Install essential provider dependencies (no markdown!)
-        silentSystem("python-embed\\python.exe -m pip install curl_cffi certifi browser_cookie3 ddgs --prefer-binary --no-warn-script-location --quiet");
-
         gui->addLog("Skipped markdown converters (saves ~150MB)");
     }
 
     gui->setProgress(90);
     gui->addLog("g4f installed successfully!");
+
+    return true;
+}
+
+
+bool updateG4F(LauncherGUI* gui) {
+    gui->setStatus("Updating g4f...");
+    gui->addLog("\n=== G4F UPDATE ===");
+
+    // Ask user which version to install
+    int choice = MessageBoxW(nullptr,
+        L"Choose installation type:\n\n"
+        L"YES = Full installation (g4f[all])\n"
+        L"       All features and extras\n"
+        L"       ~600MB download\n"
+        L"       4-5 minutes\n\n"
+        L"NO = Optimized installation - RECOMMENDED\n"
+        L"      API + GUI + providers\n"
+        L"      Skips markdown converters\n"
+        L"      ~150MB download\n"
+        L"      1-2 minutes\n"
+        L"      Much faster!\n\n"
+        L"Install full version?",
+        L"Installation Type",
+        MB_YESNO | MB_ICONQUESTION | MB_DEFBUTTON2);
+
+    gui->addLog("Updating...");
+    silentSystem("python-embed\\python.exe -m pip install g4f -U --no-warn-script-location --quiet");
+
+    gui->setProgress(90);
+    gui->addLog("g4f updated successfully!");
 
     return true;
 }
@@ -602,23 +617,23 @@ void installationProcess(LauncherGUI* gui) {
                 MessageBoxW(nullptr, L"Failed to install g4f!\nCheck the details log for more info.", L"Error", MB_OK | MB_ICONERROR);
                 return;
             }
-        } else {
-            gui->addLog("\n=== G4F INSTALLATION ===");
-            gui->addLog("g4f already installed!");
-            gui->setProgress(90);
-        }
 
-        installFFmpeg(gui);
-        gui->addLog("\n=== CREATING SHORTCUT ===");
-        gui->addLog("Creating desktop shortcut...");
-        if (createDesktopShortcut()) {
-            gui->addLog("✓ Desktop shortcut created: 'Start G4F Server'");
+            installFFmpeg(gui);
+            gui->addLog("\n=== CREATING SHORTCUT ===");
+            gui->addLog("Creating desktop shortcut...");
+            if (createDesktopShortcut()) {
+                gui->addLog("✓ Desktop shortcut created: 'Start G4F Server'");
+            } else {
+                gui->addLog("WARNING: Could not create desktop shortcut");
+            }
+            gui->setProgress(98);
+            gui->addLog("\n=== INSTALLATION COMPLETE ===");
+            gui->addLog("All components installed successfully!");
         } else {
-            gui->addLog("WARNING: Could not create desktop shortcut");
+            if (!updateG4F(gui)) {
+                gui->setStatus("Failed to update g4f!");
+            }
         }
-        gui->setProgress(98);
-        gui->addLog("\n=== INSTALLATION COMPLETE ===");
-        gui->addLog("All components installed successfully!");
 
         runG4FServer(gui);
 
