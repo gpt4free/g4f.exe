@@ -399,23 +399,6 @@ bool updateG4F(LauncherGUI* gui) {
     gui->setStatus("Updating g4f...");
     gui->addLog("\n=== G4F UPDATE ===");
 
-    // Ask user which version to install
-    int choice = MessageBoxW(nullptr,
-        L"Choose installation type:\n\n"
-        L"YES = Full installation (g4f[all])\n"
-        L"       All features and extras\n"
-        L"       ~600MB download\n"
-        L"       4-5 minutes\n\n"
-        L"NO = Optimized installation - RECOMMENDED\n"
-        L"      API + GUI + providers\n"
-        L"      Skips markdown converters\n"
-        L"      ~150MB download\n"
-        L"      1-2 minutes\n"
-        L"      Much faster!\n\n"
-        L"Install full version?",
-        L"Installation Type",
-        MB_YESNO | MB_ICONQUESTION | MB_DEFBUTTON2);
-
     gui->addLog("Updating...");
     silentSystem("python-embed\\python.exe -m pip install g4f -U --no-warn-script-location --quiet");
 
