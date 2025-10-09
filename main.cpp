@@ -65,18 +65,15 @@ bool createDesktopShortcut() {
     wchar_t desktopPath[MAX_PATH];
     SHGetFolderPathW(nullptr, CSIDL_DESKTOPDIRECTORY, nullptr, 0, desktopPath);
 
-    // Get current directory (where python-embed is)
+    // Get current directory and launcher exe path
     wchar_t currentDir[MAX_PATH];
     GetCurrentDirectoryW(MAX_PATH, currentDir);
 
+    wchar_t exePath[MAX_PATH];
+    GetModuleFileNameW(nullptr, exePath, MAX_PATH);
+
     // Create shortcut path
-    std::wstring shortcutPath = std::wstring(desktopPath) + L"\\Start G4F Server.lnk";
-
-    // Python exe path
-    std::wstring pythonPath = std::wstring(currentDir) + L"\\python-embed\\python.exe";
-
-    // Command arguments
-    std::wstring arguments = L"-m g4f.cli api --port 8080";
+    std::wstring shortcutPath = std::wstring(desktopPath) + L"\\G4F Launcher.lnk";
 
     // Create shortcut using COM
     CoInitialize(nullptr);
@@ -86,13 +83,12 @@ bool createDesktopShortcut() {
                                    IID_IShellLinkW, (void**)&pShellLink);
 
     if (SUCCEEDED(hr)) {
-        pShellLink->SetPath(pythonPath.c_str());
-        pShellLink->SetArguments(arguments.c_str());
+        pShellLink->SetPath(exePath);
         pShellLink->SetWorkingDirectory(currentDir);
-        pShellLink->SetDescription(L"Start g4f API and GUI server");
+        pShellLink->SetDescription(L"Launch G4F Server");
 
-        // Set icon (use Python icon)
-        pShellLink->SetIconLocation(pythonPath.c_str(), 0);
+        // Use the launcher's own icon
+        pShellLink->SetIconLocation(exePath, 0);
 
         IPersistFile* pPersistFile = nullptr;
         hr = pShellLink->QueryInterface(IID_IPersistFile, (void**)&pPersistFile);
@@ -139,6 +135,90 @@ int visibleSystem(const std::string& command, LauncherGUI* gui) {
     CloseHandle(pi.hThread);
 
     gui->addLog("Process completed with code: " + std::to_string(exitCode));
+
+    return exitCode;
+}
+
+int systemWithOutput(const std::string& command, LauncherGUI* gui) {
+    STARTUPINFOA si = {};
+    PROCESS_INFORMATION pi = {};
+    SECURITY_ATTRIBUTES sa = {};
+
+    sa.nLength = sizeof(SECURITY_ATTRIBUTES);
+    sa.bInheritHandle = TRUE;
+    sa.lpSecurityDescriptor = nullptr;
+
+    // Create pipes for stdout and stderr
+    HANDLE hReadPipe, hWritePipe;
+    if (!CreatePipe(&hReadPipe, &hWritePipe, &sa, 0)) {
+        gui->addLog("ERROR: Failed to create pipe");
+        return -1;
+    }
+
+    SetHandleInformation(hReadPipe, HANDLE_FLAG_INHERIT, 0);
+
+    si.cb = sizeof(si);
+    si.dwFlags = STARTF_USESTDHANDLES | STARTF_USESHOWWINDOW;
+    si.hStdOutput = hWritePipe;
+    si.hStdError = hWritePipe;
+    si.wShowWindow = SW_HIDE;
+
+    std::string cmd = "cmd.exe /C " + command + " 2>&1";
+
+    if (!CreateProcessA(nullptr, const_cast<char*>(cmd.c_str()),
+        nullptr, nullptr, TRUE, CREATE_NO_WINDOW,
+        nullptr, nullptr, &si, &pi)) {
+        CloseHandle(hReadPipe);
+        CloseHandle(hWritePipe);
+        gui->addLog("ERROR: Failed to create process");
+        return -1;
+    }
+
+    CloseHandle(hWritePipe);
+
+
+    std::thread([hReadPipe, gui]() {
+        char buffer[4096];
+        DWORD bytesRead;
+        std::string line;
+
+        while (ReadFile(hReadPipe, buffer, sizeof(buffer) - 1, &bytesRead, nullptr) && bytesRead > 0) {
+            buffer[bytesRead] = '\0';
+            line += buffer;
+
+
+            size_t pos;
+            while ((pos = line.find('\n')) != std::string::npos) {
+                std::string logLine = line.substr(0, pos);
+                if (!logLine.empty() && logLine != "\r") {
+                    // Remove carriage return if present
+                    if (!logLine.empty() && logLine.back() == '\r') {
+                        logLine.pop_back();
+                    }
+                    gui->addLog(logLine);
+                }
+                line = line.substr(pos + 1);
+            }
+        }
+
+
+        if (!line.empty() && line != "\r" && line != "\n") {
+            if (!line.empty() && line.back() == '\r') {
+                line.pop_back();
+            }
+            gui->addLog(line);
+        }
+
+        CloseHandle(hReadPipe);
+    }).detach();
+
+    WaitForSingleObject(pi.hProcess, INFINITE);
+
+    DWORD exitCode;
+    GetExitCodeProcess(pi.hProcess, &exitCode);
+
+    CloseHandle(pi.hProcess);
+    CloseHandle(pi.hThread);
 
     return exitCode;
 }
@@ -360,48 +440,18 @@ bool installG4F(LauncherGUI* gui) {
         }
 
     } else {
-        // Optimized installation (no markdown bloat)
-        gui->addLog("Installing g4f (optimized installation - recommended)...");
-        gui->addLog("Installing core package and essential dependencies...");
-        gui->addLog("This may take 3-5 minutes (~250-300MB)...");
+        gui->addLog("Installing g4f[slim] (optimized installation)...");
+        gui->addLog("This may take 1-2 minutes (~significantly less MB)...");
 
         gui->setProgress(70);
-        gui->setStatus("Installing g4f core...");
+        gui->setStatus("Installing g4f and dependencies...");
 
-        // Install core g4f
-        int result = silentSystem("python-embed\\python.exe -m pip install g4f --prefer-binary --no-warn-script-location");
+        int result = silentSystem("python-embed\\python.exe -m pip install \"g4f[slim]\" --prefer-binary --no-warn-script-location");
+
         if (result != 0) {
-            gui->addLog("ERROR: Failed to install g4f core!");
+            gui->addLog("ERROR: g4f installation failed!");
             return false;
         }
-
-        gui->setProgress(75);
-        gui->setStatus("Installing API server...");
-        gui->addLog("Installing API server dependencies...");
-
-        // Install API dependencies
-        result = silentSystem("python-embed\\python.exe -m pip install fastapi uvicorn python-multipart loguru --prefer-binary --no-warn-script-location --quiet");
-        if (result != 0) {
-            gui->addLog("WARNING: Some API dependencies may be missing");
-        }
-
-        gui->setProgress(80);
-        gui->setStatus("Installing GUI...");
-        gui->addLog("Installing GUI dependencies...");
-
-        // Install GUI dependencies
-        result = silentSystem("python-embed\\python.exe -m pip install flask werkzeug a2wsgi beautifulsoup4 pillow --prefer-binary --no-warn-script-location --quiet");
-        if (result != 0) {
-            gui->addLog("WARNING: Some GUI dependencies may be missing");
-        }
-
-        gui->setProgress(85);
-        gui->addLog("Installing provider dependencies...");
-
-        // Install essential provider dependencies (no markdown!)
-        silentSystem("python-embed\\python.exe -m pip install curl_cffi certifi browser_cookie3 ddgs --prefer-binary --no-warn-script-location --quiet");
-
-        gui->addLog("Skipped markdown converters (saves ~150MB)");
     }
 
     gui->setProgress(90);
@@ -561,10 +611,9 @@ void runG4FServer(LauncherGUI* gui) {
     gui->addLog("Browser opened!");
     gui->addLog("\nServer running on http://localhost:8080");
     gui->addLog("Both API and GUI are available!");
-    gui->addLog("\nKeep this window open to keep server running.");
-    gui->addLog("Close this window to stop the server.");
+    gui->addLog("\nYou can close this window now.");
 
-    // Keep GUI open so server keeps running
+
 }
 void installationProcess(LauncherGUI* gui) {
     try {
@@ -605,14 +654,17 @@ void installationProcess(LauncherGUI* gui) {
         } else {
             gui->addLog("\n=== G4F INSTALLATION ===");
             gui->addLog("g4f already installed!");
+            gui->addLog("checking for updates");
             gui->setProgress(90);
         }
+        systemWithOutput("python-embed\\python.exe -m pip install -U g4f", gui);
+        gui->addLog("g4f is upto date!");
 
         installFFmpeg(gui);
         gui->addLog("\n=== CREATING SHORTCUT ===");
         gui->addLog("Creating desktop shortcut...");
         if (createDesktopShortcut()) {
-            gui->addLog("✓ Desktop shortcut created: 'Start G4F Server'");
+            gui->addLog(" Desktop shortcut created: 'G4F Launcher' ");
         } else {
             gui->addLog("WARNING: Could not create desktop shortcut");
         }
