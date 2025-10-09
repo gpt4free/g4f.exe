@@ -23,13 +23,13 @@
 ## 📥 Download Options
 
 ### Option 1: Installer (Recommended)
-**[Download g4f_launcher.exe](https://github.com/gpt4free/g4f.exe/releases/download/ver1/g4f_launcher.exe)** (~100 KB)
+**[Download g4f_launcher.exe](https://github.com/gpt4free/g4f.exe/releases/download/v1.0.1/g4f_launcher.exe)** (~500 KB)
 
 - Automatically downloads and installs Python + g4f
-- Choose Optimized (149 MB) or Full (600 MB)
+- Choose Optimized (300 MB) or Full (600 MB)
 
 ### Option 2: Portable (Pre-installed)
-**[Download gpt4free_portable_preinstalled.zip](https://github.com/gpt4free/g4f.exe/releases/download/ver1/gpt4free_portable_preinstalled.zip)** (~600 MB)
+**[Download gpt4free_portable_preinstalled.zip](https://github.com/gpt4free/g4f.exe/releases/download/v1.0.1/gpt4free_portable_preinstalled.zip)** (~600 MB)
 
 - Python and g4f already installed
 - Just extract and run
