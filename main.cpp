@@ -6,6 +6,7 @@
 #include <sstream>
 #include <thread>
 #include <chrono>
+#include <algorithm>
 #include "gui.h"
 #include <shlobj.h>
 #include <shobjidl.h>
@@ -13,7 +14,27 @@
 #pragma comment(lib, "ole32.lib")
 namespace fs = std::filesystem;
 
+struct LaunchOptions {
+    bool silentMode = false;
+};
 
+// Parse command-line arguments
+LaunchOptions parseCommandLine(LPSTR lpCmdLine) {
+    LaunchOptions options;
+    std::string cmdLine(lpCmdLine);
+
+    // Convert to lowercase for case-insensitive matching
+    std::transform(cmdLine.begin(), cmdLine.end(), cmdLine.begin(), ::tolower);
+
+    // Check for silent mode
+    if (cmdLine.find("/silent") != std::string::npos ||
+        cmdLine.find("/s") != std::string::npos ||
+        cmdLine.find("-silent") != std::string::npos) {
+        options.silentMode = true;
+        }
+
+    return options;
+}
 
 int detectWindowsVersion() {
     OSVERSIONINFOEXW osvi = {};
@@ -28,13 +49,20 @@ int detectWindowsVersion() {
     return 3; // Win8.1+
 }
 
-std::string getPythonDownloadURL(LauncherGUI* gui) {
+std::string getPythonDownloadURL(LauncherGUI* gui, bool silentMode) {
     int winVersion = detectWindowsVersion();
 
     if (winVersion <= 2) {
         // Vista or Win7 detected
         gui->addLog("Windows Vista/7 detected!");
 
+        if (silentMode) {
+            // Silent mode: Auto-select Vista-compatible
+            gui->addLog("Auto-selecting Vista-compatible Python 3.12.10 (silent mode)");
+            return "https://github.com/vladimir-andreevich/cpython-windows-vista-and-7/raw/d80b35bd1699491a821da4c05b8b1526303a9507/v3.12/python-3.12.10-embed-amd64.zip";
+        }
+
+        // Normal mode: Show prompt
         int choice = MessageBoxW(nullptr,
             L"Windows Vista/7 Detected!\n\n"
             L"Choose Python version:\n\n"
@@ -49,15 +77,15 @@ std::string getPythonDownloadURL(LauncherGUI* gui) {
         if (choice == IDYES) {
             gui->addLog("Using Vista-compatible Python 3.12.10");
             return "https://github.com/vladimir-andreevich/cpython-windows-vista-and-7/raw/d80b35bd1699491a821da4c05b8b1526303a9507/v3.12/python-3.12.10-embed-amd64.zip";
-        } else {
-            gui->addLog("Using standard Python 3.12.0");
-            return "https://www.python.org/ftp/python/3.12.0/python-3.12.0-embed-amd64.zip";
         }
-    } else {
-        // Windows 8.1 or newer
-        gui->addLog("Windows 8.1+ detected - using official Python 3.12.0");
+
+        gui->addLog("Using standard Python 3.12.0");
         return "https://www.python.org/ftp/python/3.12.0/python-3.12.0-embed-amd64.zip";
     }
+
+    // Windows 8.1 or newer
+    gui->addLog("Windows 8.1+ detected - using official Python 3.12.0");
+    return "https://www.python.org/ftp/python/3.12.0/python-3.12.0-embed-amd64.zip";
 }
 
 bool createDesktopShortcut() {
@@ -309,13 +337,13 @@ bool enableSitePackages() {
     return true;
 }
 
-bool downloadPython(LauncherGUI* gui) {
+bool downloadPython(LauncherGUI* gui, bool silentMode) {
     gui->setStatus("Downloading portable Python...");
     gui->addLog("=== PYTHON SETUP ===");
     gui->addLog("Detecting Windows version...");
     gui->setProgress(10);
 
-    std::string url = getPythonDownloadURL(gui);
+    std::string url = getPythonDownloadURL(gui, silentMode);
 
     gui->addLog("Downloading Python embedded...");
     std::string downloadCmd = "powershell -Command \"Invoke-WebRequest -Uri '" + url + "' -OutFile 'python.zip'\"";
@@ -398,26 +426,33 @@ bool installPip(LauncherGUI* gui) {
     return true;
 }
 
-bool installG4F(LauncherGUI* gui) {
+bool installG4F(LauncherGUI* gui, bool silentMode) {
     gui->setStatus("Installing g4f...");
     gui->addLog("\n=== G4F INSTALLATION ===");
 
-    // Ask user which version to install
-    int choice = MessageBoxW(nullptr,
-        L"Choose installation type:\n\n"
-        L"YES = Full installation (g4f[all])\n"
-        L"       All features and extras\n"
-        L"       ~600MB download\n"
-        L"       4-5 minutes\n\n"
-        L"NO = Optimized installation - RECOMMENDED\n"
-        L"      API + GUI + providers\n"
-        L"      Skips markdown converters\n"
-        L"      ~150MB download\n"
-        L"      1-2 minutes\n"
-        L"      Much faster!\n\n"
-        L"Install full version?",
-        L"Installation Type",
-        MB_YESNO | MB_ICONQUESTION | MB_DEFBUTTON2);
+    int choice;
+    if (silentMode) {
+        // Silent mode: Default to FULL installation
+        choice = IDYES;
+        gui->addLog("Installing g4f[all] (full installation) - silent mode");
+    } else {
+        // Normal mode: Ask user (existing behavior)
+        choice = MessageBoxW(nullptr,
+            L"Choose installation type:\n\n"
+            L"YES = Full installation (g4f[all])\n"
+            L"       All features and extras\n"
+            L"       ~600MB download\n"
+            L"       4-5 minutes\n\n"
+            L"NO = Optimized installation - RECOMMENDED\n"
+            L"      API + GUI + providers\n"
+            L"      Skips markdown converters\n"
+            L"      ~reduced MB download\n"
+            L"      1-2 minutes\n"
+            L"      Much faster!\n\n"
+            L"Install full version?",
+            L"Installation Type",
+            MB_YESNO | MB_ICONQUESTION | MB_DEFBUTTON2);
+    }
 
     gui->addLog("Installing build tools...");
     silentSystem("python-embed\\python.exe -m pip install setuptools wheel --no-warn-script-location --quiet");
@@ -438,10 +473,10 @@ bool installG4F(LauncherGUI* gui) {
             gui->addLog("ERROR: g4f installation failed!");
             return false;
         }
-
     } else {
+        // Slim installation
         gui->addLog("Installing g4f[slim] (optimized installation)...");
-        gui->addLog("This may take 1-2 minutes (~significantly less MB)...");
+        gui->addLog("This may take 1-2 minutes (reduced mb)...");
 
         gui->setProgress(70);
         gui->setStatus("Installing g4f and dependencies...");
@@ -460,7 +495,7 @@ bool installG4F(LauncherGUI* gui) {
     return true;
 }
 
-bool installFFmpeg(LauncherGUI* gui) {
+bool installFFmpeg(LauncherGUI* gui, bool silentMode) {
     gui->setProgress(91);
     gui->addLog("\n=== FFMPEG INSTALLATION ===");
 
@@ -471,29 +506,39 @@ bool installFFmpeg(LauncherGUI* gui) {
         return true;
     }
 
-    // Ask user if they want to install it
-    gui->addLog("Prompting user for optional ffmpeg installation...");
+    int choice;
+    if (silentMode) {
+        // Silent mode: Auto-install ffmpeg
+        choice = IDYES;
+        gui->addLog("Installing ffmpeg automatically (silent mode)...");
+    } else {
+        // Normal mode: Ask user (existing behavior)
+        gui->addLog("Prompting user for optional ffmpeg installation...");
 
-    int choice = MessageBoxW(nullptr,
-        L"Install ffmpeg? (~100MB, 5-10 minutes)\n\n"
-        L"ffmpeg is optional and enables audio processing features.\n"
-        L"Most g4f features work perfectly without it.\n\n"
-        L"You can always install it manually later if needed.\n\n"
-        L"Install ffmpeg now?",
-        L"Optional Component - ffmpeg",
-        MB_YESNO | MB_ICONQUESTION | MB_DEFBUTTON2);  // Default to NO
+        choice = MessageBoxW(nullptr,
+            L"Install ffmpeg? (~100MB, 5-10 minutes)\n\n"
+            L"ffmpeg is optional and enables audio processing features.\n"
+            L"Most g4f features work perfectly without it.\n\n"
+            L"You can always install it manually later if needed.\n\n"
+            L"Install ffmpeg now?",
+            L"Optional Component - ffmpeg",
+            MB_YESNO | MB_ICONQUESTION | MB_DEFBUTTON2);
+    }
 
     if (choice == IDNO) {
-        gui->addLog("User skipped ffmpeg installation (optional)");
+        gui->addLog("ffmpeg installation skipped (optional)");
         gui->addLog("g4f will work fine without it!");
         gui->setProgress(98);
         return true;
     }
 
-    // User wants to install it
-    gui->addLog("User chose to install ffmpeg");
+    // User wants to install it (or silent mode)
     gui->addLog("Downloading ffmpeg (~100 MB)...");
-    gui->addLog("A console window will show download progress...");
+
+    if (!silentMode) {
+        gui->addLog("A console window will show download progress...");
+    }
+
     gui->setStatus("Downloading ffmpeg (optional)...");
 
     std::string ffmpegUrl = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip";
@@ -501,15 +546,19 @@ bool installFFmpeg(LauncherGUI* gui) {
                              "$ProgressPreference = 'Continue'; "
                              "Invoke-WebRequest -Uri '" + ffmpegUrl + "' -OutFile 'ffmpeg.zip' -Verbose\"";
 
-    int result = visibleSystem(downloadCmd, gui);
+    // Use silentSystem in silent mode, visibleSystem in normal mode
+    int result = silentMode ? silentSystem(downloadCmd) : visibleSystem(downloadCmd, gui);
+
     if (result != 0) {
         gui->addLog("WARNING: ffmpeg download failed");
-        MessageBoxW(nullptr,
-            L"ffmpeg download failed.\n\n"
-            L"This is optional - g4f will still work!\n"
-            L"You can install ffmpeg manually later if needed.",
-            L"Optional Component Failed",
-            MB_OK | MB_ICONWARNING);
+        if (!silentMode) {
+            MessageBoxW(nullptr,
+                L"ffmpeg download failed.\n\n"
+                L"This is optional - g4f will still work!\n"
+                L"You can install ffmpeg manually later if needed.",
+                L"Optional Component Failed",
+                MB_OK | MB_ICONWARNING);
+        }
         gui->setProgress(98);
         return true;
     }
@@ -520,7 +569,9 @@ bool installFFmpeg(LauncherGUI* gui) {
 
     std::string extractCmd = "powershell -Command \"Write-Host 'Extracting...'; "
                             "Expand-Archive -Path 'ffmpeg.zip' -DestinationPath 'ffmpeg-temp' -Force\"";
-    result = visibleSystem(extractCmd, gui);
+
+    result = silentMode ? silentSystem(extractCmd) : visibleSystem(extractCmd, gui);
+
     if (result != 0) {
         gui->addLog("WARNING: ffmpeg extraction failed");
         fs::remove("ffmpeg.zip");
@@ -615,15 +666,22 @@ void runG4FServer(LauncherGUI* gui) {
 
 
 }
-void installationProcess(LauncherGUI* gui) {
+void installationProcess(LauncherGUI* gui, const LaunchOptions& options) {
     try {
         gui->addLog("g4f Launcher by jokukiller");
+
+        if (options.silentMode) {
+            gui->addLog("Running in SILENT mode - automated installation");
+        }
+
         gui->addLog("Starting installation process...\n");
 
         if (!pythonExists()) {
-            if (!downloadPython(gui)) {
+            if (!downloadPython(gui, options.silentMode)) {
                 gui->setStatus("Failed to setup Python!");
-                MessageBoxW(nullptr, L"Failed to download Python!\nCheck the details log for more info.", L"Error", MB_OK | MB_ICONERROR);
+                if (!options.silentMode) {
+                    MessageBoxW(nullptr, L"Failed to download Python!\nCheck the details log for more info.", L"Error", MB_OK | MB_ICONERROR);
+                }
                 return;
             }
         } else {
@@ -636,7 +694,9 @@ void installationProcess(LauncherGUI* gui) {
         if (!pipExists()) {
             if (!installPip(gui)) {
                 gui->setStatus("Failed to install pip!");
-                MessageBoxW(nullptr, L"Failed to install pip!\nCheck the details log for more info.", L"Error", MB_OK | MB_ICONERROR);
+                if (!options.silentMode) {
+                    MessageBoxW(nullptr, L"Failed to install pip!\nCheck the details log for more info.", L"Error", MB_OK | MB_ICONERROR);
+                }
                 return;
             }
         } else {
@@ -646,28 +706,33 @@ void installationProcess(LauncherGUI* gui) {
         }
 
         if (!g4fExists()) {
-            if (!installG4F(gui)) {
+            if (!installG4F(gui, options.silentMode)) {
                 gui->setStatus("Failed to install g4f!");
-                MessageBoxW(nullptr, L"Failed to install g4f!\nCheck the details log for more info.", L"Error", MB_OK | MB_ICONERROR);
+                if (!options.silentMode) {
+                    MessageBoxW(nullptr, L"Failed to install g4f!\nCheck the details log for more info.", L"Error", MB_OK | MB_ICONERROR);
+                }
                 return;
             }
         } else {
             gui->addLog("\n=== G4F INSTALLATION ===");
             gui->addLog("g4f already installed!");
-            gui->addLog("checking for updates");
+            gui->addLog("Checking for updates...");
             gui->setProgress(90);
         }
-        systemWithOutput("python-embed\\python.exe -m pip install -U g4f", gui);
-        gui->addLog("g4f is upto date!");
 
-        installFFmpeg(gui);
+        systemWithOutput("python-embed\\python.exe -m pip install -U g4f", gui);
+        gui->addLog("g4f is up to date!");
+
+        installFFmpeg(gui, options.silentMode);
+
         gui->addLog("\n=== CREATING SHORTCUT ===");
         gui->addLog("Creating desktop shortcut...");
         if (createDesktopShortcut()) {
-            gui->addLog(" Desktop shortcut created: 'G4F Launcher' ");
+            gui->addLog(" Desktop shortcut created: 'G4F Launcher'");
         } else {
             gui->addLog("WARNING: Could not create desktop shortcut");
         }
+
         gui->setProgress(98);
         gui->addLog("\n=== INSTALLATION COMPLETE ===");
         gui->addLog("All components installed successfully!");
@@ -676,23 +741,36 @@ void installationProcess(LauncherGUI* gui) {
 
     } catch (const std::exception& e) {
         gui->addLog(std::string("\nFATAL ERROR: ") + e.what());
-        MessageBoxW(nullptr, L"An unexpected error occurred!\nCheck the details log for more info.", L"Error", MB_OK | MB_ICONERROR);
+        if (!options.silentMode) {
+            MessageBoxW(nullptr, L"An unexpected error occurred!\nCheck the details log for more info.", L"Error", MB_OK | MB_ICONERROR);
+        }
     } catch (...) {
         gui->addLog("\nFATAL ERROR: Unknown exception occurred!");
-        MessageBoxW(nullptr, L"An unexpected error occurred!\nCheck the details log for more info.", L"Error", MB_OK | MB_ICONERROR);
+        if (!options.silentMode) {
+            MessageBoxW(nullptr, L"An unexpected error occurred!\nCheck the details log for more info.", L"Error", MB_OK | MB_ICONERROR);
+        }
     }
 }
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
+    // Parse command-line arguments
+    LaunchOptions options = parseCommandLine(lpCmdLine);
+
     LauncherGUI gui(hInstance);
 
     if (!gui.create()) {
-        MessageBoxW(nullptr, L"Failed to create window!", L"Error", MB_OK | MB_ICONERROR);
+        if (!options.silentMode) {
+            MessageBoxW(nullptr, L"Failed to create window!", L"Error", MB_OK | MB_ICONERROR);
+        }
         return 1;
     }
 
     gui.show();
-    gui.runInstallation(installationProcess);
+
+    // Pass options to the installation process
+    gui.runInstallation([options](LauncherGUI* gui) {
+        installationProcess(gui, options);
+    });
 
     return 0;
 }
