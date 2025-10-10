@@ -41,7 +41,10 @@ Server → *Connection refused* ❌
 
 ## Manual Installation Guide
 
-If automatic installation fails due to TLS limitations:
+If automatic installation fails due to TLS limitations: 
+First try the zip [https://github.com/gpt4free/g4f.exe/releases/download/v1.0.1-2/vista_compatibl_g4f.zip] 
+if the zip also does not work. 
+then try manual install: 
 
 ### Step 1: Download Files on Modern Computer
 
